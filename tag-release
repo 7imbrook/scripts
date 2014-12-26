@@ -1,0 +1,81 @@
+#!/bin/bash
+
+### MAIN ###
+if [ $# -ne 0 ] && [ $# -eq 2 ]; then
+	case $1 in
+		redeploy)
+			HAS=$(git tag -l | grep $2);
+			if [ -z $HAS ]; then
+				echo "Tag not deployed";
+				exit 1;
+			else
+				deployVersion $HAS
+				exit 1;
+			fi
+			;;
+		*)
+			echo "Invalid command";
+			exit 1;
+			;;
+	esac
+else
+	echo "Invalid command";
+	exit 1;
+fi;
+
+
+# Check status
+CHANGES=$(git status --porcelain | wc -l);
+
+if [ $CHANGES -ne 0 ]; then
+	echo "You need to commit your changes before starting a deploy";
+	exit 1;
+fi;
+
+BRANCH=$(git status | head -n 1 | awk '{print $3}');
+
+if [ $BRANCH != "master" ] && [ $BRANCH != "development" ]; then
+	echo "You are not on the master or development branches, would you still like to deploy the current branch? ($BRANCH) [ y | N ]";
+	read stillDeploy;
+	case $stillDeploy in
+		[yY] )
+			echo "Starting deploy of branch $BRANCH";
+			;;
+		* )
+			echo "Exiting";
+			exit 1;
+			;;
+	esac
+fi
+
+# Check if ever been taged
+TAG=$(git tag -l | tail -n 1);
+if [ "$TAG" == "" ]; then
+	echo "No tags present, tagging current HEAD at v0.0.0";
+	git tag -a v0.0.0 -m "Initial Deploy";
+else
+	echo "Currently at $TAG";
+	echo "Increment by [ major | minor | PATCH ]";
+	read semInc;
+	NEWTAG=TAG
+	case $semInc in
+		major)
+			echo "Major release";
+			H=$(echo $TAG | awk -F \. {'print $1+1'})
+			NEWTAG="v$H.0.0";
+			;;
+		minor)
+			echo "Minor release";
+			H=$(echo $TAG | awk -F \. {'print $1'})
+			M=$(echo $TAG | awk -F \. {'print $2+1'})
+			NEWTAG="$H.$M.0";
+			;;
+		*)	
+			echo "Patch";
+			NEWTAG=${TAG%.*}.$((${TAG##*.}+1))
+			;;
+	esac
+	echo "Release message for $NEWTAG";
+	read message;
+	git tag -a $NEWTAG -m "$message";
+fi;
